@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 
 data class StrokeData(
     val points: List<Offset>,
@@ -31,6 +33,12 @@ data class PenEvent(
     val y: Float,
     val timestampMillis: Long,
     val deltaMs: Long
+)
+
+data class PauseRecord(
+    val timestampMillis: Long,
+    val pauseMs: Long,
+    val strokeId: Int
 )
 
 private fun logPenEvent(eventType: String, pointerType: PointerType, x: Float, y: Float) {
@@ -63,6 +71,9 @@ fun SimpleDrawingCanvas(
     val activePointers = remember { mutableSetOf<Long>() }
     val strokeCounter = remember { mutableIntStateOf(0) }
     val lastTimestampMillis = remember { mutableStateOf(0L) }
+    val pauseCount = remember { mutableIntStateOf(0) }
+    val lastPauseMs = remember { mutableStateOf(0L) }
+    val pauseRecords = remember { mutableStateListOf<PauseRecord>() }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -81,6 +92,15 @@ fun SimpleDrawingCanvas(
 
                             if (deltaMs >= 1000L) {
                                 logPause(deltaMs, strokeCounter.intValue)
+                                pauseCount.intValue++
+                                lastPauseMs.value = deltaMs
+                                pauseRecords.add(
+                                    PauseRecord(
+                                        timestampMillis = now,
+                                        pauseMs = deltaMs,
+                                        strokeId = strokeCounter.intValue
+                                    )
+                                )
                             }
 
                             for (change in event.changes) {
@@ -154,10 +174,26 @@ fun SimpleDrawingCanvas(
             }
         }
 
+        Text(
+            text = "Stroke=${points.size} Pause=${pauseCount.intValue} LastPauseMs=${lastPauseMs.value}",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp),
+            color = Color.Black
+        )
+
         Button(
             onClick = {
+                val maxPauseMs = pauseRecords.maxOfOrNull { it.pauseMs } ?: 0L
+                Log.d(
+                    "MathMetaPenLog",
+                    "Summary totalPause=${pauseRecords.size} maxPauseMs=$maxPauseMs Time=${System.currentTimeMillis()}"
+                )
                 points.clear()
                 currentStroke.clear()
+                pauseRecords.clear()
+                pauseCount.intValue = 0
+                lastPauseMs.value = 0L
                 onClear()
             },
             modifier = Modifier.align(Alignment.TopCenter)
