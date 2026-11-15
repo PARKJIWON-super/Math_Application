@@ -4,22 +4,18 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
 
 data class StrokeData(
     val points: List<Offset>,
@@ -64,16 +60,25 @@ private fun logPause(pauseMs: Long, strokeId: Int) {
 @Composable
 fun SimpleDrawingCanvas(
     modifier: Modifier = Modifier,
-    onClear: () -> Unit = {}
+    clearSignal: Int = 0,
+    onPauseDetected: (pauseMs: Long, strokeId: Int) -> Unit = { _, _ -> },
+    onStrokeAdded: (Int) -> Unit = {}
 ) {
     val points = remember { mutableStateListOf<StrokeData>() }
     val currentStroke = remember { mutableStateListOf<Offset>() }
     val activePointers = remember { mutableSetOf<Long>() }
     val strokeCounter = remember { mutableIntStateOf(0) }
     val lastTimestampMillis = remember { mutableStateOf(0L) }
-    val pauseCount = remember { mutableIntStateOf(0) }
-    val lastPauseMs = remember { mutableStateOf(0L) }
-    val pauseRecords = remember { mutableStateListOf<PauseRecord>() }
+
+    LaunchedEffect(clearSignal) {
+        if (clearSignal > 0) {
+            points.clear()
+            currentStroke.clear()
+            activePointers.clear()
+            strokeCounter.intValue = 0
+            lastTimestampMillis.value = 0L
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -92,15 +97,7 @@ fun SimpleDrawingCanvas(
 
                             if (deltaMs >= 1000L) {
                                 logPause(deltaMs, strokeCounter.intValue)
-                                pauseCount.intValue++
-                                lastPauseMs.value = deltaMs
-                                pauseRecords.add(
-                                    PauseRecord(
-                                        timestampMillis = now,
-                                        pauseMs = deltaMs,
-                                        strokeId = strokeCounter.intValue
-                                    )
-                                )
+                                onPauseDetected(deltaMs, strokeCounter.intValue)
                             }
 
                             for (change in event.changes) {
@@ -137,6 +134,7 @@ fun SimpleDrawingCanvas(
                                         )
                                         if (currentStroke.size >= 2) {
                                             points.add(StrokeData(currentStroke.toList()))
+                                            onStrokeAdded(points.size)
                                         }
                                         currentStroke.clear()
                                     }
@@ -172,33 +170,6 @@ fun SimpleDrawingCanvas(
                     prev = point
                 }
             }
-        }
-
-        Text(
-            text = "Stroke=${points.size} Pause=${pauseCount.intValue} LastPauseMs=${lastPauseMs.value}",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp),
-            color = Color.Black
-        )
-
-        Button(
-            onClick = {
-                val maxPauseMs = pauseRecords.maxOfOrNull { it.pauseMs } ?: 0L
-                Log.d(
-                    "MathMetaPenLog",
-                    "Summary totalPause=${pauseRecords.size} maxPauseMs=$maxPauseMs Time=${System.currentTimeMillis()}"
-                )
-                points.clear()
-                currentStroke.clear()
-                pauseRecords.clear()
-                pauseCount.intValue = 0
-                lastPauseMs.value = 0L
-                onClear()
-            },
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            Text(text = "Clear")
         }
     }
 }
