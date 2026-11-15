@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +25,14 @@ data class StrokeData(
     val strokeWidth: Float = 4f
 )
 
+data class PenEvent(
+    val strokeId: Int,
+    val x: Float,
+    val y: Float,
+    val timestampMillis: Long,
+    val deltaMs: Long
+)
+
 private fun logPenEvent(eventType: String, pointerType: PointerType, x: Float, y: Float) {
     val typeStr = when (pointerType) {
         PointerType.Stylus -> "Stylus"
@@ -36,6 +46,13 @@ private fun logPenEvent(eventType: String, pointerType: PointerType, x: Float, y
     )
 }
 
+private fun logPause(pauseMs: Long, strokeId: Int) {
+    Log.d(
+        "MathMetaPenLog",
+        "Pause pauseMs=$pauseMs StrokeId=$strokeId Time=${System.currentTimeMillis()}"
+    )
+}
+
 @Composable
 fun SimpleDrawingCanvas(
     modifier: Modifier = Modifier,
@@ -44,6 +61,8 @@ fun SimpleDrawingCanvas(
     val points = remember { mutableStateListOf<StrokeData>() }
     val currentStroke = remember { mutableStateListOf<Offset>() }
     val activePointers = remember { mutableSetOf<Long>() }
+    val strokeCounter = remember { mutableIntStateOf(0) }
+    val lastTimestampMillis = remember { mutableStateOf(0L) }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -55,10 +74,20 @@ fun SimpleDrawingCanvas(
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
+                            val now = System.currentTimeMillis()
+                            val prevTime = lastTimestampMillis.value
+                            val deltaMs = if (prevTime != 0L) now - prevTime else 0L
+                            lastTimestampMillis.value = now
+
+                            if (deltaMs >= 1000L) {
+                                logPause(deltaMs, strokeCounter.intValue)
+                            }
+
                             for (change in event.changes) {
                                 val pointerId = change.id.value
                                 when {
                                     change.pressed && !activePointers.contains(pointerId) -> {
+                                        strokeCounter.intValue++
                                         activePointers.add(pointerId)
                                         logPenEvent(
                                             "Down",
