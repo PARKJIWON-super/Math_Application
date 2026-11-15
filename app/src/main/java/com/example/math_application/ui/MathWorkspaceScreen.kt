@@ -1,6 +1,15 @@
 package com.example.math_application.ui
 
+import android.graphics.Bitmap as AndroidBitmap
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,9 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.math_application.MathProblem
-import kotlin.OptIn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,11 +49,57 @@ fun MathWorkspaceScreen(
     onSummaryClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     var strokeCount by remember { mutableIntStateOf(0) }
     var pauseCount by remember { mutableIntStateOf(0) }
     var lastPauseMs by remember { mutableStateOf(0L) }
     var clearSignal by remember { mutableIntStateOf(0) }
     val pauseRecords = remember { mutableStateListOf<PauseRecord>() }
+
+    // PDF 관련 state
+    var pdfUri by remember { mutableStateOf<Uri?>(null) }
+    var pdfBitmap by remember { mutableStateOf<AndroidBitmap?>(null) }
+    var pdfError by remember { mutableStateOf<String?>(null) }
+
+    // PDF 선택 launcher
+    val launcherPdf = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            if (uri != null) {
+                pdfError = null
+                try {
+                    val parcelFd = context.contentResolver.openFileDescriptor(uri, "r")
+                        ?: throw IllegalStateException("파일 디스크립터를 열 수 없습니다.")
+                    parcelFd.use { pfd ->
+                        PdfRenderer(pfd).use { renderer ->
+                            if (renderer.pageCount <= 0) {
+                                throw IllegalStateException("PDF 페이지가 없습니다.")
+                            }
+                            renderer.openPage(0).use { page ->
+                                val bitmap = AndroidBitmap.createBitmap(
+                                    page.width,
+                                    page.height,
+                                    AndroidBitmap.Config.ARGB_8888
+                                )
+                                page.render(
+                                    bitmap,
+                                    null,
+                                    null,
+                                    PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                                )
+                                pdfBitmap = bitmap
+                                pdfUri = uri
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    pdfError = "PDF 로드 실패: ${e.message}"
+                    Log.e("MathWorkspaceScreen", "PDF 로드 에러", e)
+                }
+            }
+        }
+    )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -71,6 +129,14 @@ fun MathWorkspaceScreen(
                         Button(onClick = onSummaryClicked) {
                             Text(text = "요약")
                         }
+                        Button(
+                            onClick = {
+                                pdfError = null
+                                launcherPdf.launch(arrayOf("application/pdf"))
+                            }
+                        ) {
+                            Text(text = if (pdfUri != null) "PDF 다시 선택" else "PDF 선택")
+                        }
                     }
                 }
             )
@@ -86,7 +152,7 @@ fun MathWorkspaceScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
@@ -122,25 +188,59 @@ fun MathWorkspaceScreen(
                 }
             }
 
-            // 중앙 필기 캔버스 영역
-            SimpleDrawingCanvas(
-                modifier = Modifier.weight(1f),
-                clearSignal = clearSignal,
-                onPauseDetected = { pauseMs, strokeId ->
-                    pauseCount++
-                    lastPauseMs = pauseMs
-                    pauseRecords.add(
-                        PauseRecord(
-                            timestampMillis = System.currentTimeMillis(),
-                            pauseMs = pauseMs,
-                            strokeId = strokeId
-                        )
+            // PDF 로드 에러 표시
+            pdfError?.let { error ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
                     )
-                },
-                onStrokeAdded = { newCount ->
-                    strokeCount = newCount
                 }
-            )
+            }
+
+            // 중앙 필기 캔버스 영역 (PDF 배경 위에 SimpleDrawingCanvas 오버레이)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                pdfBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "PDF 배경",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(-1f)
+                    )
+                }
+
+                SimpleDrawingCanvas(
+                    modifier = Modifier.fillMaxSize(),
+                    clearSignal = clearSignal,
+                    onPauseDetected = { pauseMs, strokeId ->
+                        pauseCount++
+                        lastPauseMs = pauseMs
+                        pauseRecords.add(
+                            PauseRecord(
+                                timestampMillis = System.currentTimeMillis(),
+                                pauseMs = pauseMs,
+                                strokeId = strokeId
+                            )
+                        )
+                    },
+                    onStrokeAdded = { newCount ->
+                        strokeCount = newCount
+                    }
+                )
+            }
 
             // 하단 바: 펜 두께 및 메타인지 상태 선택 뼈대
             Row(
@@ -173,6 +273,9 @@ fun MathWorkspaceScreen(
                         pauseCount = 0
                         lastPauseMs = 0L
                         clearSignal++
+                        pdfBitmap = null
+                        pdfUri = null
+                        pdfError = null
                     }
                 ) {
                     Text(text = "Clear")
