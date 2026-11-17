@@ -8,6 +8,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -15,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.math_application.ui.HomeScreen
 import com.example.math_application.ui.MathWorkspaceScreen
+import com.example.math_application.ui.PauseRecord
 import com.example.math_application.ui.SummaryScreen
 import com.example.math_application.ui.theme.Math_ApplicationTheme
 
@@ -43,6 +46,10 @@ class MainActivity : ComponentActivity() {
                 ) {
                     var screen by remember { mutableStateOf(AppScreen.HOME) }
                     var currentProblem by remember { mutableStateOf<MathProblem?>(null) }
+                    var summaryStrokeCount by remember { mutableIntStateOf(0) }
+                    var summaryPauseCount by remember { mutableIntStateOf(0) }
+                    var summaryLastPauseMs by remember { mutableStateOf(0L) }
+                    val summaryPauseRecords = remember { mutableStateListOf<PauseRecord>() }
 
                     when (screen) {
                         AppScreen.HOME -> HomeScreen(
@@ -57,9 +64,21 @@ class MainActivity : ComponentActivity() {
                             currentProblem = currentProblem,
                             onBack = { screen = AppScreen.HOME },
                             onSummaryClicked = { screen = AppScreen.SUMMARY },
+                            onSummaryData = { strokeCount, pauseCount, lastPauseMs, records ->
+                                summaryStrokeCount = strokeCount
+                                summaryPauseCount = pauseCount
+                                summaryLastPauseMs = lastPauseMs
+                                summaryPauseRecords.clear()
+                                summaryPauseRecords.addAll(records)
+                                screen = AppScreen.SUMMARY
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                         AppScreen.SUMMARY -> SummaryScreen(
+                            strokeCount = summaryStrokeCount,
+                            pauseCount = summaryPauseCount,
+                            lastPauseMs = summaryLastPauseMs,
+                            pauseRecords = summaryPauseRecords.toList(),
                             onBack = { screen = AppScreen.HOME },
                             onRetry = {
                                 currentProblem = null

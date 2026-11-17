@@ -50,6 +50,7 @@ fun MathWorkspaceScreen(
     currentProblem: MathProblem?,
     onBack: () -> Unit,
     onSummaryClicked: () -> Unit,
+    onSummaryData: (Int, Int, Long, List<PauseRecord>) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -165,7 +166,15 @@ fun MathWorkspaceScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Button(onClick = onSummaryClicked) {
+                        Button(onClick = {
+                            onSummaryData(
+                                strokeCount,
+                                pauseCount,
+                                lastPauseMs,
+                                pauseRecords.toList()
+                            )
+                            onSummaryClicked()
+                        }) {
                             Text(text = "요약")
                         }
                         Button(

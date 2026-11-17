@@ -25,6 +25,10 @@ import kotlin.OptIn
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(
+    strokeCount: Int = 0,
+    pauseCount: Int = 0,
+    lastPauseMs: Long = 0L,
+    pauseRecords: List<PauseRecord> = emptyList(),
     onBack: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
@@ -69,32 +73,50 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "총 획 수: --",
+                        text = "총 획 수: $strokeCount",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.align(Alignment.Start)
                     )
                     Text(
-                        text = "총 Pause 횟수: 0",
+                        text = "총 Pause 횟수: $pauseCount",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .align(Alignment.Start)
                             .padding(top = 4.dp)
                     )
                     Text(
-                        text = "최대 Pause 시간: -- ms",
+                        text = "최대 Pause 시간: ${pauseRecords.maxOfOrNull { it.pauseMs } ?: 0L} ms",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .align(Alignment.Start)
                             .padding(top = 4.dp)
                     )
-                    Text(
-                        text = "구간별 멈춤 목록: 기록 없음",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .align(Alignment.Start)
-                            .padding(top = 8.dp)
-                    )
+                    if (pauseRecords.isNotEmpty()) {
+                        Text(
+                            text = "구간별 멈춤 목록:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .align(Alignment.Start)
+                                .padding(top = 8.dp)
+                        )
+                        pauseRecords.forEach { record ->
+                            Text(
+                                text = "  획 ${record.strokeId}: ${record.pauseMs}ms",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "구간별 멈춤 목록: 기록 없음",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .align(Alignment.Start)
+                                .padding(top = 8.dp)
+                        )
+                    }
                 }
             }
 
