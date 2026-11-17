@@ -376,13 +376,6 @@ fun MathWorkspaceScreen(
                     )
                 ) { Text(text = "6px") }
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "메타인지 상태:",
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Button(onClick = {}) { Text(text = "집중") }
-                Button(onClick = {}) { Text(text = "막힘") }
-                Button(onClick = {}) { Text(text = "검토") }
                 Button(
                     onClick = {
                         pauseRecords.clear()
