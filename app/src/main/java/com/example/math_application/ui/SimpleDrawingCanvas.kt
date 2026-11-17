@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -61,6 +62,7 @@ private fun logPause(pauseMs: Long, strokeId: Int) {
 fun SimpleDrawingCanvas(
     modifier: Modifier = Modifier,
     clearSignal: Int = 0,
+    strokeWidth: Float = 4f,
     onPauseDetected: (pauseMs: Long, strokeId: Int) -> Unit = { _, _ -> },
     onStrokeAdded: (Int) -> Unit = {}
 ) {
@@ -69,6 +71,7 @@ fun SimpleDrawingCanvas(
     val activePointers = remember { mutableSetOf<Long>() }
     val strokeCounter = remember { mutableIntStateOf(0) }
     val lastTimestampMillis = remember { mutableStateOf(0L) }
+    val latestStrokeWidth = rememberUpdatedState(strokeWidth)
 
     LaunchedEffect(clearSignal) {
         if (clearSignal > 0) {
@@ -133,7 +136,12 @@ fun SimpleDrawingCanvas(
                                             change.position.y
                                         )
                                         if (currentStroke.size >= 2) {
-                                            points.add(StrokeData(currentStroke.toList()))
+                                            points.add(
+                                                StrokeData(
+                                                    points = currentStroke.toList(),
+                                                    strokeWidth = latestStrokeWidth.value
+                                                )
+                                            )
                                             onStrokeAdded(points.size)
                                         }
                                         currentStroke.clear()
@@ -164,7 +172,7 @@ fun SimpleDrawingCanvas(
                         start = prev,
                         end = point,
                         color = Color.Black,
-                        strokeWidth = 4f,
+                        strokeWidth = strokeWidth,
                         cap = StrokeCap.Round
                     )
                     prev = point

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,6 +68,9 @@ fun MathWorkspaceScreen(
     // PDF 페이지 상태
     var pdfPageCount by remember { mutableIntStateOf(0) }
     var pdfCurrentPageIndex by remember { mutableIntStateOf(0) }
+
+    // 펜 두께 상태
+    var selectedStrokeWidth by remember { mutableStateOf(4f) }
 
     // PDF 선택 launcher
     val launcherPdf = rememberLauncherForActivityResult(
@@ -295,6 +299,7 @@ fun MathWorkspaceScreen(
                 SimpleDrawingCanvas(
                     modifier = Modifier.fillMaxSize(),
                     clearSignal = clearSignal,
+                    strokeWidth = selectedStrokeWidth,
                     onPauseDetected = { pauseMs, strokeId ->
                         pauseCount++
                         lastPauseMs = pauseMs
@@ -325,9 +330,51 @@ fun MathWorkspaceScreen(
                     text = "펜 두께:",
                     style = MaterialTheme.typography.labelSmall
                 )
-                Button(onClick = {}) { Text(text = "2px") }
-                Button(onClick = {}) { Text(text = "4px") }
-                Button(onClick = {}) { Text(text = "6px") }
+                Button(
+                    onClick = { selectedStrokeWidth = 2f },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedStrokeWidth == 2f) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        contentColor = if (selectedStrokeWidth == 2f) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) { Text(text = "2px") }
+                Button(
+                    onClick = { selectedStrokeWidth = 4f },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedStrokeWidth == 4f) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        contentColor = if (selectedStrokeWidth == 4f) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) { Text(text = "4px") }
+                Button(
+                    onClick = { selectedStrokeWidth = 6f },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedStrokeWidth == 6f) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        contentColor = if (selectedStrokeWidth == 6f) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) { Text(text = "6px") }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "메타인지 상태:",
