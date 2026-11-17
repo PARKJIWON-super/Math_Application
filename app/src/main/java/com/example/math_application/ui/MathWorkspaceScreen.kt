@@ -3,6 +3,7 @@ package com.example.math_application.ui
 import android.graphics.Bitmap as AndroidBitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -62,6 +64,10 @@ fun MathWorkspaceScreen(
     var pdfBitmap by remember { mutableStateOf<AndroidBitmap?>(null) }
     var pdfError by remember { mutableStateOf<String?>(null) }
 
+    // PDF 페이지 상태
+    var pdfPageCount by remember { mutableIntStateOf(0) }
+    var pdfCurrentPageIndex by remember { mutableIntStateOf(0) }
+
     // PDF 선택 launcher
     val launcherPdf = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -76,21 +82,9 @@ fun MathWorkspaceScreen(
                             if (renderer.pageCount <= 0) {
                                 throw IllegalStateException("PDF 페이지가 없습니다.")
                             }
-                            renderer.openPage(0).use { page ->
-                                val bitmap = AndroidBitmap.createBitmap(
-                                    page.width,
-                                    page.height,
-                                    AndroidBitmap.Config.ARGB_8888
-                                )
-                                page.render(
-                                    bitmap,
-                                    null,
-                                    null,
-                                    PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
-                                )
-                                pdfBitmap = bitmap
-                                pdfUri = uri
-                            }
+                            pdfPageCount = renderer.pageCount
+                            pdfCurrentPageIndex = 0
+                            pdfUri = uri
                         }
                     }
                 } catch (e: Exception) {
@@ -100,6 +94,46 @@ fun MathWorkspaceScreen(
             }
         }
     )
+
+    // PDF 페이지 전환을 위한 DisposableEffect (리소스 안전 정리)
+    DisposableEffect(pdfUri, pdfCurrentPageIndex) {
+        val targetUri = pdfUri
+        var currentParcelFd: ParcelFileDescriptor? = null
+        var currentRenderer: PdfRenderer? = null
+        var currentPage: PdfRenderer.Page? = null
+
+        if (targetUri != null) {
+            try {
+                currentParcelFd = context.contentResolver.openFileDescriptor(targetUri, "r")
+                    ?: throw IllegalStateException("파일 디스크립터를 열 수 없습니다.")
+                currentRenderer = PdfRenderer(currentParcelFd)
+                if (pdfCurrentPageIndex in 0 until currentRenderer.pageCount) {
+                    currentPage = currentRenderer.openPage(pdfCurrentPageIndex)
+                    val bitmap = AndroidBitmap.createBitmap(
+                        currentPage.width,
+                        currentPage.height,
+                        AndroidBitmap.Config.ARGB_8888
+                    )
+                    currentPage.render(
+                        bitmap,
+                        null,
+                        null,
+                        PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                    )
+                    pdfBitmap = bitmap
+                }
+            } catch (e: Exception) {
+                pdfError = "PDF 페이지 렌더링 실패: ${e.message}"
+                Log.e("MathWorkspaceScreen", "PDF 페이지 렌더링 에러", e)
+            }
+        }
+
+        onDispose {
+            currentPage?.close()
+            currentRenderer?.close()
+            currentParcelFd?.close()
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -119,7 +153,8 @@ fun MathWorkspaceScreen(
                 actions = {
                     Row(
                         modifier = Modifier.padding(end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             text = "Stroke=$strokeCount  Pause=$pauseCount  LastPauseMs=$lastPauseMs",
@@ -136,6 +171,41 @@ fun MathWorkspaceScreen(
                             }
                         ) {
                             Text(text = if (pdfUri != null) "PDF 다시 선택" else "PDF 선택")
+                        }
+                        // 페이지 이동 버튼
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (pdfCurrentPageIndex > 0) {
+                                        pdfCurrentPageIndex--
+                                    }
+                                },
+                                enabled = pdfCurrentPageIndex > 0 && pdfPageCount > 0
+                            ) {
+                                Text(text = "◀")
+                            }
+                            Text(
+                                text = if (pdfPageCount > 0) {
+                                    "${pdfCurrentPageIndex + 1} / $pdfPageCount"
+                                } else {
+                                    "0 / 0"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Button(
+                                onClick = {
+                                    if (pdfCurrentPageIndex < pdfPageCount - 1) {
+                                        pdfCurrentPageIndex++
+                                    }
+                                },
+                                enabled = pdfPageCount > 0 && pdfCurrentPageIndex < pdfPageCount - 1
+                            ) {
+                                Text(text = "▶")
+                            }
                         }
                     }
                 }
@@ -276,6 +346,8 @@ fun MathWorkspaceScreen(
                         pdfBitmap = null
                         pdfUri = null
                         pdfError = null
+                        pdfPageCount = 0
+                        pdfCurrentPageIndex = 0
                     }
                 ) {
                     Text(text = "Clear")
